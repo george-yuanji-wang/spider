@@ -24,9 +24,11 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'camera = spider_core.camera:main',
-            'motor = spider_core.motor:main',
-            'keyboard = spider_core.keyboard:main',
+            'camera       = spider_core.camera:main',
+            'motor        = spider_core.motor:main',
+            'keyboard     = spider_core.keyboard:main',
+            'ball_track   = spider_core.ball_track:main',
+            'ball_display = spider_core.ball_display:main',
         ],
     },
 )

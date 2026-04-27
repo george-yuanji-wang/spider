@@ -1,0 +1,1 @@
+scp -r /home/spider/spider georgeilli@Georges-MacBook-Pro.local:/Users/georgeilli/Desktop/Projects/Spider2/

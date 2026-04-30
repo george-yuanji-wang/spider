@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+/* ── Font Declarations ── */
+@font-face {
+  font-family: "RubikLines";
+  src: url("/fonts/RubikLines-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "StackSansNotch-ExtraLight";
+  src: url("/fonts/StackSansNotch-ExtraLight.ttf") format("truetype");
+  font-weight: 200;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "StackSansNotch-Light";
+  src: url("/fonts/StackSansNotch-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "StackSansNotch-Regular";
+  src: url("/fonts/StackSansNotch-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "StackSansNotch-Medium";
+  src: url("/fonts/StackSansNotch-Medium.ttf") format("truetype");
+  font-weight: 500;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "StackSansNotch-SemiBold";
+  src: url("/fonts/StackSansNotch-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "StackSansNotch-Bold";
+  src: url("/fonts/StackSansNotch-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* ── Design Tokens ── */
+@theme {
+  --color-background:     #1E1B17;
+  --color-surface:        #38322C;
+  --color-border:         #516067;
+  --color-accent:         #C38D4F;
+  --color-text-primary:   #D8CFC0;
+  --color-text-secondary: #9A9080;
+  --color-destructive:    #A74A43;
+  --color-online:         #4A7060;
+
+  --font-rubik-lines:      "RubikLines", sans-serif;
+  --font-stack-extralight: "StackSansNotch-ExtraLight", sans-serif;
+  --font-stack-light:      "StackSansNotch-Light", sans-serif;
+  --font-stack-regular:    "StackSansNotch-Regular", sans-serif;
+  --font-stack-medium:     "StackSansNotch-Medium", sans-serif;
+  --font-stack-semibold:   "StackSansNotch-SemiBold", sans-serif;
+  --font-stack-bold:       "StackSansNotch-Bold", sans-serif;
+}
+
+/* ── Base Reset ── */
+@layer base {
+  html, body {
+    @apply bg-background text-text-primary font-stack-regular;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+}
+
+/* Remove number input spinners */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] { -moz-appearance: textfield; }

@@ -18,17 +18,23 @@ setup(
     description='TODO: Package description',
     license='TODO: License declaration',
     extras_require={
-        'test': [
-            'pytest',
-        ],
+        'test': ['pytest'],
     },
     entry_points={
         'console_scripts': [
+            # ── Existing nodes ──────────────────────────────────
             'camera       = spider_core.camera:main',
             'motor        = spider_core.motor:main',
             'keyboard     = spider_core.keyboard:main',
             'ball_track   = spider_core.ball_track:main',
             'ball_display = spider_core.ball_display:main',
+
+            # ── New nodes ────────────────────────────────────────
+            'camera_node     = spider_core.camera_node:main',
+            'ball_track_node = spider_core.ball_track_node:main',
+            'path_plan_node  = spider_core.path_plan_node:main',
+            'motor_node      = spider_core.motor_node:main',
+            'bridge_node     = spider_core.bridge_node:main',
         ],
     },
 )

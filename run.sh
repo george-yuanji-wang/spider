@@ -38,7 +38,7 @@ source "$WS_DIR/install/setup.bash"
 # ── Start HTTP server (must come before bridge_node) ─────────────
 echo "[spider] Starting HTTP server..."
 cd "$SPIDER_DIR"
-python -m uvicorn bridge.main:app \
+python3 -m uvicorn bridge.main:app \
     --host 0.0.0.0 \
     --port 8000 \
     > "$LOG_DIR/http.log" 2>&1 &

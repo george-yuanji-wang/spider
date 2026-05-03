@@ -11,21 +11,19 @@ Run alongside HTTP server as two separate processes:
 
 import json
 import subprocess
-import sys
+import importlib.util
 import os
 
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Float32
 
-# Locate shared.py in bridge/ relative to ROS install
-_BRIDGE_DIR = os.path.join(
-    os.path.dirname(__file__),
-    '..', '..', '..', '..', '..', '..', 'bridge'
+_spec = importlib.util.spec_from_file_location(
+    "shared",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "..", "bridge", "shared.py")
 )
-sys.path.insert(0, os.path.abspath(_BRIDGE_DIR))
-import shared
-
+shared = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(shared)
 
 WATCHED_NODES = {
     "camera":     "camera_status",

@@ -8,7 +8,7 @@
 
 set -e
 
-WS_DIR="$HOME/ros2_ws"
+WS_DIR="$HOME/spider/core"
 GUI_DIR="$(cd "$(dirname "$0")/gui" && pwd)"
 LOG_DIR="$(cd "$(dirname "$0")" && pwd)/logs"
 

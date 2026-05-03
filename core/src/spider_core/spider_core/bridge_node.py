@@ -375,27 +375,43 @@ class BridgeNode(Node):
 def main(args=None):
     import threading
     import uvicorn
+    import signal
 
     rclpy.init(args=args)
     node = BridgeNode()
 
-    # Spin rclpy in its own thread
-    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    # Track server handle for clean shutdown
+    server_config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        log_level="warning",
+    )
+    server = uvicorn.Server(server_config)
+
+    # Spin rclpy in background thread
+    spin_thread = threading.Thread(
+        target=rclpy.spin,
+        args=(node,),
+        daemon=True,
+    )
     spin_thread.start()
 
-    # Run uvicorn on the main thread — blocking
+    # Handle SIGINT/SIGTERM cleanly
+    def shutdown(signum, frame):
+        node.get_logger().info("Shutdown signal received")
+        server.should_exit = True
+
+    signal.signal(signal.SIGINT,  shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    # Uvicorn on main thread — blocks until server.should_exit
     try:
-        uvicorn.run(
-            app,
-            host="0.0.0.0",
-            port=8000,
-            log_level="warning",
-        )
-    except KeyboardInterrupt:
-        pass
+        server.run()
     finally:
         node.destroy_node()
         rclpy.shutdown()
+        node.get_logger().info("Bridge node stopped cleanly")
 
 if __name__ == "__main__":
     main()

@@ -66,6 +66,10 @@ echo "[spider] Starting motor_node..."
 ros2 run spider_core motor_node \
     > "$LOG_DIR/motor.log" 2>&1 &
 
+echo "[spider] Starting stream_node..."
+ros2 run spider_core stream_node \
+    > "$LOG_DIR/stream.log" 2>&1 &
+
 echo "[spider] All processes launched. Logs in $LOG_DIR/"
 
 # ── Optionally launch GUI ────────────────────────────────────────

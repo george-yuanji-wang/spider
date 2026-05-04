@@ -15,6 +15,7 @@ DEFAULT_STATE = {
         "motor_status":   False,
         "tracker_status": False,
         "planner_status": False,
+        "stream_status":  False,
         "camera_fps":     0.0,
         "tracker_fps":    0.0,
         "planner_fps":    0.0,
@@ -30,6 +31,7 @@ DEFAULT_CTRL = {
     "input_left":  0,
     "input_right": 0,
     "speed":       50,
+    "claw":       False,
 }
 
 DEFAULT_PARAMS = {

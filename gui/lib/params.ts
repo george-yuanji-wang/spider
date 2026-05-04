@@ -17,13 +17,13 @@ export interface Params {
 export const defaultParams: Params = {
   ball: {
     hue_low:     90,
-    hue_high:    115,
-    sat_low:     80,
-    sat_high:    255,
-    val_low:     80,
+    hue_high:    106,
+    sat_low:     100,
+    sat_high:    220,
+    val_low:     100,
     val_high:    255,
     min_radius:  8,
-    blur_kernel: 7,
+    blur_kernel: 2,
     dilate_iter: 1,
   },
 };

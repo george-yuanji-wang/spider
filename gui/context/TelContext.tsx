@@ -24,7 +24,7 @@ export function TelProvider({ children }: { children: ReactNode }) {
     };
 
     poll();
-    const id = setInterval(poll, 200);
+    const id = setInterval(poll, 100);
     return () => clearInterval(id);
   }, []);
 

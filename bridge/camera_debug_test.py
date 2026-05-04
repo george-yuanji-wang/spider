@@ -8,10 +8,10 @@ from collections import deque
 DEVICE = 0
 WIDTH = 640
 HEIGHT = 480
-FPS = 30
+FPS = 60
 DURATION = 10
 USE_MJPG = True
-NO_DISPLAY = True
+NO_DISPLAY = False
 
 
 def fourcc_to_str(value):

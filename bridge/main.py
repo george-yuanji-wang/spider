@@ -20,6 +20,7 @@ class CtrlPayload(BaseModel):
     input_left:  int
     input_right: int
     speed:       int
+    claw:       bool
 
 
 class BallParamsPayload(BaseModel):
@@ -56,6 +57,7 @@ def post_ctrl(payload: CtrlPayload):
         "input_left":  payload.input_left,
         "input_right": payload.input_right,
         "speed":       payload.speed,
+        "claw":        payload.claw,
     })
     return {"ok": True}
 

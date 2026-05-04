@@ -6,6 +6,7 @@ export interface Ctrl {
   input_left:  number;
   input_right: number;
   speed:       number;
+  claw:       boolean;
 }
 
 export const defaultCtrl: Ctrl = {
@@ -14,4 +15,5 @@ export const defaultCtrl: Ctrl = {
   input_left:  0,
   input_right: 0,
   speed:       50,
+  claw:       false,
 };

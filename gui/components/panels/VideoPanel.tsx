@@ -4,6 +4,8 @@ import { useRef, useEffect, useState } from "react";
 import { useTel }   from "@/context/TelContext";
 import Toggle       from "@/components/ui/Toggle";
 
+const STREAM_URL = `http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8001/stream`;
+
 export default function VideoPanel() {
   const { tel } = useTel();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -66,13 +68,39 @@ export default function VideoPanel() {
 
       <div className="relative flex-shrink-0" style={{ width: 640, height: 480 }}>
         {displayOn ? (
-          <video className="absolute inset-0 w-full h-full object-cover" autoPlay muted />
+          <>
+            {/* MJPEG stream — browser handles decoding natively */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={STREAM_URL}
+              alt="live feed"
+              style={{
+                position:   "absolute",
+                inset:      0,
+                width:      "100%",
+                height:     "100%",
+                objectFit:  "cover",
+              }}
+            />
+          </>
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: "#0E0C0A" }}>
-            <span className="font-stack-light text-text-secondary text-sm tracking-widest">NOT AVAILABLE</span>
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ backgroundColor: "#0E0C0A" }}
+          >
+            <span className="font-stack-light text-text-secondary text-sm tracking-widest">
+              NOT AVAILABLE
+            </span>
           </div>
         )}
-        <canvas ref={canvasRef} width={640} height={480} className="absolute inset-0 pointer-events-none" />
+
+        {/* Overlay canvas — always on top */}
+        <canvas
+          ref={canvasRef}
+          width={640}
+          height={480}
+          className="absolute inset-0 pointer-events-none"
+        />
       </div>
     </div>
   );

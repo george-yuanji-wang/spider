@@ -32,13 +32,14 @@ export default function TelemetryPanel() {
         Telemetry
       </span>
 
-      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, paddingLeft: "8px", gap: "12px" }}>
+      <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, paddingLeft: "8px", gap: "4px" }}>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 24px", flexShrink: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px 24px", flexShrink: 0 }}>
           <StatusIndicator label="Camera"  active={tel.camera_status}  fps={tel.camera_fps}  />
-          <StatusIndicator label="Motor"   active={tel.motor_status}                         />
           <StatusIndicator label="Tracker" active={tel.tracker_status} fps={tel.tracker_fps} />
           <StatusIndicator label="Planner" active={tel.planner_status} fps={tel.planner_fps} />
+          <StatusIndicator label="Stream"  active={tel.stream_status}                        />
+          <StatusIndicator label="Motor"   active={tel.motor_status}                         />
         </div>
 
         <div style={{ flex: 1, minHeight: 0 }}>

@@ -18,6 +18,7 @@ export interface Tel {
   motor_status:   boolean;
   tracker_status: boolean;
   planner_status: boolean;
+  stream_status:  boolean;
   camera_fps:     number;
   tracker_fps:    number;
   planner_fps:    number;
@@ -31,6 +32,7 @@ export const defaultTel: Tel = {
   motor_status:   false,
   tracker_status: false,
   planner_status: false,
+  stream_status: false,
   camera_fps:     0,
   tracker_fps:    0,
   planner_fps:    0,

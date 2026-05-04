@@ -30,6 +30,7 @@ WATCHED_NODES = {
     "ball_track": "tracker_status",
     "path_plan":  "planner_status",
     "motor_node": "motor_status",
+    "stream_node": "stream_status",
 }
 
 

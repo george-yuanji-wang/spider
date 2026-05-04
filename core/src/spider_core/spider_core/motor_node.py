@@ -91,6 +91,7 @@ class MotorNode(Node):
             self._input_left  = int(d.get('input_left',  0))
             self._input_right = int(d.get('input_right', 0))
             self._speed       = int(d.get('speed',       50))
+            self._claw        = bool(d.get('claw',        False))
         except (json.JSONDecodeError, ValueError) as e:
             self.get_logger().warn(f'Malformed spider/ctrl: {e}')
 
@@ -105,6 +106,8 @@ class MotorNode(Node):
     # ── Output ───────────────────────────────────────────────────
 
     def _output(self):
+        claw_val = 1 if self._claw else 0
+        
         if not self._armed:
             self._send_serial(STOP_LEFT, STOP_RIGHT, STOP_SPEED)
             return

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState }      from "react";
+import { useState, useEffect }  from "react";
 import { useCtrl }       from "@/context/CtrlContext";
 import { useParams }     from "@/context/ParamsContext";
 import { useCli }        from "@/context/CliContext";
 import { defaultParams } from "@/lib/params";
 import { DriveMode }     from "@/lib/ctrl";
 import ModeLever         from "@/components/ui/ModeLever";
+import ClawLever         from "@/components/ui/ClawLever";
 
 const INPUT_STYLE: React.CSSProperties = {
   width:           "44px",
@@ -76,14 +77,6 @@ function SectionLabel({ children }: { children: string }) {
   );
 }
 
-function Placeholder() {
-  return (
-    <span style={{ fontFamily: "StackSansNotch-ExtraLight, sans-serif", fontSize: "9px", color: "#3E3830" }}>
-      Not configured
-    </span>
-  );
-}
-
 function ColDivider() {
   return <div style={{ width: "1px", backgroundColor: "#2A2420", flexShrink: 0, alignSelf: "stretch" }} />;
 }
@@ -107,6 +100,22 @@ export default function ControlPanel() {
   });
 
   const f = (key: keyof typeof draft) => (v: string) => setDraft(d => ({ ...d, [key]: v }));
+
+  /* I/O keyboard for claw */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "o") {
+        setCtrl(c => ({ ...c, claw: false }));
+        addMessage("Claw: open");
+      }
+      if (e.key.toLowerCase() === "i") {
+        setCtrl(c => ({ ...c, claw: true }));
+        addMessage("Claw: closed");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handleSend = () => {
     const n = (k: keyof typeof draft) => parseInt(draft[k], 10) || 0;
@@ -141,6 +150,11 @@ export default function ControlPanel() {
     addMessage(`Drive mode → ${m}`);
   };
 
+  const handleClawChange = (closed: boolean) => {
+    setCtrl(c => ({ ...c, claw: closed }));
+    addMessage(`Claw: ${closed ? "closed" : "open"}`);
+  };
+
   return (
     <div style={{
       display:        "flex",
@@ -171,7 +185,7 @@ export default function ControlPanel() {
 
           <div style={{ paddingLeft: "6px", display: "flex", flexDirection: "row", gap: "14px", alignItems: "flex-start" }}>
 
-            {/* Col 1: Ball HSV */}
+            {/* Ball HSV */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0 }}>
               <SectionLabel>Ball HSV</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -183,7 +197,7 @@ export default function ControlPanel() {
 
             <ColDivider />
 
-            {/* Col 2: Detection */}
+            {/* Detection */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0 }}>
               <SectionLabel>Detection</SectionLabel>
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -195,23 +209,17 @@ export default function ControlPanel() {
 
             <ColDivider />
 
-            {/* Col 3: Path */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0, width: "80px" }}>
+            {/* Path */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0, width: "70px" }}>
               <SectionLabel>Path</SectionLabel>
-              <Placeholder />
+              <span style={{ fontFamily: "StackSansNotch-ExtraLight, sans-serif", fontSize: "9px", color: "#3E3830" }}>
+                Not configured
+              </span>
             </div>
 
             <ColDivider />
 
-            {/* Col 4: System */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0, width: "80px" }}>
-              <SectionLabel>System</SectionLabel>
-              <Placeholder />
-            </div>
-
-            <ColDivider />
-
-            {/* Col 5: Apply */}
+            {/* Apply */}
             <div style={{ display: "flex", flexDirection: "column", gap: "5px", flexShrink: 0, alignItems: "flex-start" }}>
               <SectionLabel>Apply</SectionLabel>
               <button
@@ -230,6 +238,18 @@ export default function ControlPanel() {
 
           </div>
         </div>
+
+        <div style={{ width: "14px", flexShrink: 0 }} />
+        <ColDivider />
+
+        {/* Claw */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", flexShrink: 0, width: "90px", padding: "0 12px" }}>
+          <span style={{ fontFamily: "StackSansNotch-SemiBold, sans-serif", fontSize: "13px", letterSpacing: "0.12em", color: "#D8CFC0", textTransform: "uppercase" }}>
+            Claw
+          </span>
+          <ClawLever closed={ctrl.claw} onChange={handleClawChange} />
+        </div>
+
       </div>
     </div>
   );

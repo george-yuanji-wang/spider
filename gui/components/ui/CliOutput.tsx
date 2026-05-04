@@ -69,7 +69,7 @@ export default function CliOutput() {
         </div>
       </div>
 
-      <div style={{ flex: 1, backgroundColor: "#252118", border: "1.5px solid #516067", borderRadius: "4px", overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: "5px", minHeight: 0 }}>
+      <div style={{ flex: 1, backgroundColor: "#171C1F", border: "1.5px solid #516067", borderRadius: "4px", overflowY: "auto", padding: "10px", display: "flex", flexDirection: "column", gap: "5px", minHeight: 0 }}>
         {visible.length === 0 ? (
           <span style={{ fontFamily: "StackSansNotch-Light, sans-serif", fontSize: "10px", color: "#3E3830", letterSpacing: "0.08em", margin: "auto" }}>
             No message at this time

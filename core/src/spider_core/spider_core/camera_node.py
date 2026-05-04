@@ -6,6 +6,7 @@ from std_msgs.msg import Header, Float32
 import cv2
 import numpy as np
 from cv_bridge import CvBridge
+import threading
 import time
 
 
@@ -26,11 +27,18 @@ class CameraNode(Node):
         self.fps_pub   = self.create_publisher(Float32,    'camera/fps', 10)
 
         self.bridge = CvBridge()
-        self.cap = None
+        self.cap    = None
+
+        self._latest_frame    = None
+        self._frame_lock      = threading.Lock()
+        self._camera_fps_times: list[float] = []
+
         self._open_camera()
 
-        self._frame_times: list[float] = []
-        self.timer     = self.create_timer(1.0 / self.fps, self._capture_callback)
+        self._capture_thread = threading.Thread(target=self._capture_loop, daemon=True)
+        self._capture_thread.start()
+
+        self.timer     = self.create_timer(1.0 / self.fps, self._publish_callback)
         self.fps_timer = self.create_timer(1.0, self._publish_fps)
         self.add_on_set_parameters_callback(self._on_parameter_change)
 
@@ -60,6 +68,7 @@ class CameraNode(Node):
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         self.cap.set(cv2.CAP_PROP_FPS,          self.fps)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE,   1)
 
         actual_w   = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_h   = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -70,15 +79,25 @@ class CameraNode(Node):
             f'actual resolution: {actual_w}x{actual_h} @ {actual_fps:.1f}fps'
         )
 
-    def _capture_callback(self):
-        if not self.cap or not self.cap.isOpened():
-            self.get_logger().warn('Camera not open, skipping frame', throttle_duration_sec=5)
-            return
+    def _capture_loop(self):
+        while rclpy.ok():
+            if not self.cap or not self.cap.isOpened():
+                time.sleep(0.1)
+                continue
 
-        ret, frame = self.cap.read()
-        if not ret:
-            self.get_logger().warn('Failed to grab frame', throttle_duration_sec=2)
-            return
+            ret, frame = self.cap.read()
+            if not ret:
+                continue
+
+            with self._frame_lock:
+                self._latest_frame = frame
+                self._camera_fps_times.append(time.monotonic())
+
+    def _publish_callback(self):
+        with self._frame_lock:
+            if self._latest_frame is None:
+                return
+            frame = self._latest_frame.copy()
 
         stamp  = self.get_clock().now().to_msg()
         header = Header(stamp=stamp, frame_id=self.frame_id)
@@ -88,13 +107,14 @@ class CameraNode(Node):
         self.image_pub.publish(img_msg)
         self.info_pub.publish(self._build_camera_info(header, frame.shape))
 
-        self._frame_times.append(time.monotonic())
-
     def _publish_fps(self):
         now = time.monotonic()
-        self._frame_times = [t for t in self._frame_times if now - t <= 1.0]
+        with self._frame_lock:
+            self._camera_fps_times = [t for t in self._camera_fps_times if now - t <= 1.0]
+            fps = float(len(self._camera_fps_times))
+
         msg      = Float32()
-        msg.data = float(len(self._frame_times))
+        msg.data = fps
         self.fps_pub.publish(msg)
 
     def _build_camera_info(self, header: Header, shape) -> CameraInfo:
@@ -120,7 +140,7 @@ class CameraNode(Node):
             if p.name == 'fps':
                 self.fps = p.value
                 self.timer.cancel()
-                self.timer = self.create_timer(1.0 / self.fps, self._capture_callback)
+                self.timer = self.create_timer(1.0 / self.fps, self._publish_callback)
                 self.get_logger().info(f'FPS changed → {self.fps}')
             elif p.name in ('width', 'height', 'device_index'):
                 setattr(self, p.name, p.value)

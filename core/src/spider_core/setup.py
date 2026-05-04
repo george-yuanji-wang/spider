@@ -35,6 +35,7 @@ setup(
             'path_plan_node  = spider_core.path_plan_node:main',
             'motor_node      = spider_core.motor_node:main',
             'bridge_node     = spider_core.bridge_node:main',
+            'stream_node     = spider_core.stream_node:main',
         ],
     },
 )

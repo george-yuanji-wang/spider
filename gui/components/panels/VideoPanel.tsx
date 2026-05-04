@@ -4,8 +4,6 @@ import { useRef, useEffect, useState } from "react";
 import { useTel }   from "@/context/TelContext";
 import Toggle       from "@/components/ui/Toggle";
 
-const STREAM_URL = `http://${typeof window !== "undefined" ? window.location.hostname : "localhost"}:8001/stream`;
-
 export default function VideoPanel() {
   const { tel } = useTel();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,14 +22,18 @@ export default function VideoPanel() {
 
     if (ballOverlayOn && tel.ball) {
       const { cx, cy, x, y, w, h } = tel.ball;
+
       if (cx !== null && cy !== null) {
         ctx.strokeStyle = "white";
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(cx - 12, cy); ctx.lineTo(cx + 12, cy);
-        ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy + 12);
+        ctx.moveTo(cx - 12, cy);
+        ctx.lineTo(cx + 12, cy);
+        ctx.moveTo(cx, cy - 12);
+        ctx.lineTo(cx, cy + 12);
         ctx.stroke();
       }
+
       if (x !== null && y !== null && w !== null && h !== null) {
         ctx.strokeStyle = "white";
         ctx.lineWidth = 2;
@@ -45,9 +47,16 @@ export default function VideoPanel() {
       ctx.beginPath();
       let started = false;
       for (const point of tel.path) {
-        if (point.x === null || point.y === null) { started = false; continue; }
-        if (!started) { ctx.moveTo(point.x, point.y); started = true; }
-        else          { ctx.lineTo(point.x, point.y); }
+        if (point.x === null || point.y === null) {
+          started = false;
+          continue;
+        }
+        if (!started) {
+          ctx.moveTo(point.x, point.y);
+          started = true;
+        } else {
+          ctx.lineTo(point.x, point.y);
+        }
       }
       ctx.stroke();
     }
@@ -55,8 +64,13 @@ export default function VideoPanel() {
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="flex items-center justify-between w-full" style={{ width: 640 }}>
-        <span className="font-stack-semibold text-text-primary tracking-widest uppercase" style={{ fontSize: "13px" }}>
+
+      {/* Top bar: title left, toggles right */}
+      <div className="flex items-center justify-between" style={{ width: 640 }}>
+        <span
+          className="font-stack-semibold text-text-primary tracking-widest uppercase"
+          style={{ fontSize: "13px" }}
+        >
           Video Feed
         </span>
         <div className="flex items-center gap-5">
@@ -66,23 +80,22 @@ export default function VideoPanel() {
         </div>
       </div>
 
+      {/* Video area */}
       <div className="relative flex-shrink-0" style={{ width: 640, height: 480 }}>
+
         {displayOn ? (
-          <>
-            {/* MJPEG stream — browser handles decoding natively */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={STREAM_URL}
-              alt="live feed"
-              style={{
-                position:   "absolute",
-                inset:      0,
-                width:      "100%",
-                height:     "100%",
-                objectFit:  "cover",
-              }}
-            />
-          </>
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src="/api/stream"
+            alt="live feed"
+            style={{
+              position:  "absolute",
+              inset:     0,
+              width:     "100%",
+              height:    "100%",
+              objectFit: "cover",
+            }}
+          />
         ) : (
           <div
             className="absolute inset-0 flex items-center justify-center"
@@ -94,13 +107,14 @@ export default function VideoPanel() {
           </div>
         )}
 
-        {/* Overlay canvas — always on top */}
+        {/* Overlay canvas always on top */}
         <canvas
           ref={canvasRef}
           width={640}
           height={480}
           className="absolute inset-0 pointer-events-none"
         />
+
       </div>
     </div>
   );

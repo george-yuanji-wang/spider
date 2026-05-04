@@ -48,6 +48,8 @@ class MotorNode(Node):
         self._auto_left   = 0
         self._auto_right  = 0
 
+        self._claw = False
+        
         self._serial = None
         self._connect_serial()
 
@@ -107,7 +109,7 @@ class MotorNode(Node):
 
     def _output(self):
         claw_val = 1 if self._claw else 0
-        
+
         if not self._armed:
             self._send_serial(STOP_LEFT, STOP_RIGHT, STOP_SPEED)
             return

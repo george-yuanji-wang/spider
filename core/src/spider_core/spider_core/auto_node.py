@@ -16,18 +16,20 @@ States:
 Subscribes:
     vision/target       std_msgs/String     target detection
     spider/ctrl         std_msgs/String     to read mode/armed
+    auto/set_state      std_msgs/String     override state from GUI
 
 Publishes:
-    path/cmd            std_msgs/String     "left,right,claw" motor command
+    path/cmd            std_msgs/String     motor command JSON
     auto/state          std_msgs/String     current state name for GUI
 
-Parameters (tunable from GUI):
+Parameters:
     approach_speed      int     forward speed during approach   default 80
     steer_gain          float   steering correction multiplier  default 0.3
     dead_zone           int     pixel error margin              default 40
-    ball_capture_cy     int     y-position where ball enters capture zone
+    ball_capture_cy     int     y-position for ball capture zone
     capture_x_margin    int     horizontal centering margin for capture
-    align_turn_speed    int     in-place turn speed for final capture alignment
+    align_turn_speed    int     in-place turn speed for alignment
+    mat_deposit_cy      int     y-position for mat deposit zone
 """
 
 import rclpy
@@ -40,27 +42,31 @@ import json
 import time
 
 
-# ── Tunable timing constants — adjust after testing ──────────────
-SEARCH_TURN_SPEED   = 60    # rotation speed when searching
-CAPTURE_OPEN_SEC    = 1.0   # time to wait after opening claw
-CAPTURE_DRIVE_SEC   = 2.0   # time to drive forward after opening claw
-CAPTURE_CLOSE_SEC   = 1.0   # time to wait after closing claw
-DEPOSIT_OPEN_SEC    = 2.0   # time claw stays open at deposit
-DEPOSIT_BACK_SEC    = 2.0   # time to reverse after deposit
-APPROACH_LOST_SEC   = 0.5   # drive straight if target lost for this long
+# ── Timing constants ─────────────────────────────────────────────
+SEARCH_TURN_SPEED   = 60
+CAPTURE_OPEN_SEC    = 1.0
+CAPTURE_DRIVE_SEC   = 2.0
+CAPTURE_CLOSE_SEC   = 1.0
+DEPOSIT_OPEN_SEC    = 2.0
+DEPOSIT_BACK_SEC    = 2.0
+APPROACH_LOST_SEC   = 0.5
 
 # ── Capture alignment thresholds ─────────────────────────────────
-# Instead of using ball bounding-box width to trigger capture, the robot
-# now waits until the detected ball center drops below this y-coordinate
-# and is horizontally centered enough.
-BALL_CAPTURE_CY     = 420   # px — ball center y at/below this → capture zone
-CAPTURE_X_MARGIN    = 45    # px — allowed horizontal error before capture
-ALIGN_TURN_SPEED    = 50    # motor speed for in-place fine alignment
+BALL_CAPTURE_CY     = 420
+CAPTURE_X_MARGIN    = 45
+ALIGN_TURN_SPEED    = 50
 
-# ── Target size thresholds ───────────────────────────────────────
-MAT_DEPOSIT_WIDTH   = 400   # px — mat this wide → start deposit
+# ── Mat deposit thresholds ───────────────────────────────────────
+MAT_DEPOSIT_CY      = 420   # same logic as ball — cy below this → deposit zone
+MAT_X_MARGIN        = 60    # slightly looser margin for mat
 
-FRAME_CX            = 320   # frame horizontal centre
+FRAME_CX            = 320
+
+# ── Valid states for override ────────────────────────────────────
+VALID_STATES = {
+    "IDLE", "SEARCH_BALL", "APPROACH_BALL", "CAPTURE",
+    "SEARCH_MAT", "APPROACH_MAT", "DEPOSIT", "DONE",
+}
 
 
 class AutoNode(Node):
@@ -75,37 +81,31 @@ class AutoNode(Node):
         self.declare_parameter("ball_capture_cy",  BALL_CAPTURE_CY)
         self.declare_parameter("capture_x_margin", CAPTURE_X_MARGIN)
         self.declare_parameter("align_turn_speed", ALIGN_TURN_SPEED)
+        self.declare_parameter("mat_deposit_cy",   MAT_DEPOSIT_CY)
         self._load_params()
 
-        # ── State machine ────────────────────────────────────────
-        # Persists across manual/auto switches
+        # ── State ────────────────────────────────────────────────
         self._state       = "IDLE"
         self._armed       = False
         self._mode        = "manual"
-        self._target      = None   # latest parsed vision target
-        self._last_seen   = 0.0    # time of last valid detection
-        self._phase_start = 0.0    # time current timed phase started
-
-        # Claw state owned here in auto mode
-        self._claw        = False  # False=open, True=closed
+        self._target      = None
+        self._last_seen   = 0.0
+        self._phase_start = 0.0
+        self._claw        = False
 
         # ── Subscribers ──────────────────────────────────────────
-        self.create_subscription(
-            String, "vision/target", self._on_target, 10
-        )
-        self.create_subscription(
-            String, "spider/ctrl", self._on_ctrl, 10
-        )
+        self.create_subscription(String, "vision/target",  self._on_target,    10)
+        self.create_subscription(String, "spider/ctrl",    self._on_ctrl,      10)
+        self.create_subscription(String, "auto/set_state", self._on_set_state, 10)
 
         # ── Publishers ───────────────────────────────────────────
         self.cmd_pub   = self.create_publisher(String, "path/cmd",   10)
         self.state_pub = self.create_publisher(String, "auto/state", 10)
 
-        # ── Timer — runs state machine at 20Hz ───────────────────
+        # ── Timer ────────────────────────────────────────────────
         self.create_timer(0.05, self._tick)
 
         self.add_on_set_parameters_callback(self._on_param_change)
-
         self.get_logger().info("Auto node ready")
 
     def _load_params(self):
@@ -115,6 +115,7 @@ class AutoNode(Node):
         self.ball_capture_cy  = self.get_parameter("ball_capture_cy").value
         self.capture_x_margin = self.get_parameter("capture_x_margin").value
         self.align_turn_speed = self.get_parameter("align_turn_speed").value
+        self.mat_deposit_cy   = self.get_parameter("mat_deposit_cy").value
 
     # ── Subscribers ──────────────────────────────────────────────
 
@@ -125,14 +126,7 @@ class AutoNode(Node):
         else:
             try:
                 cx, cy, x, y, w, h = [float(v) for v in raw.split(",")]
-                self._target = {
-                    "cx": cx,
-                    "cy": cy,
-                    "x": x,
-                    "y": y,
-                    "w": w,
-                    "h": h,
-                }
+                self._target = {"cx": cx, "cy": cy, "x": x, "y": y, "w": w, "h": h}
                 self._last_seen = time.monotonic()
             except ValueError:
                 self._target = None
@@ -145,10 +139,24 @@ class AutoNode(Node):
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # ── Vision mode switch ───────────────────────────────────────
+    def _on_set_state(self, msg: String):
+        """
+        GUI debug override — jump directly to any state.
+        Only honoured when armed and in auto mode.
+        """
+        requested = msg.data.strip().upper()
+        if requested not in VALID_STATES:
+            self.get_logger().warn(f"Invalid state override: {requested}")
+            return
+        if not self._armed or self._mode != "auto":
+            self.get_logger().warn("State override ignored — not armed/auto")
+            return
+        self.get_logger().info(f"State override: {self._state} → {requested}")
+        self._transition(requested)
+
+    # ── Vision switch ────────────────────────────────────────────
 
     def _set_detect_mode(self, mode: str):
-        """Switch vision_node between ball and mat detection."""
         subprocess.Popen(
             ["ros2", "param", "set", "/vision_node", "detect_mode", mode],
             stdout=subprocess.DEVNULL,
@@ -156,16 +164,11 @@ class AutoNode(Node):
         )
         self.get_logger().info(f"Vision mode → {mode}")
 
-    # ── Command publishing ───────────────────────────────────────
+    # ── Commands ─────────────────────────────────────────────────
 
     def _send_cmd(self, left: int, right: int, claw: bool):
-        """Publish motor command to path/cmd topic."""
         msg      = String()
-        msg.data = json.dumps({
-            "left":  left,
-            "right": right,
-            "claw":  1 if claw else 0,
-        })
+        msg.data = json.dumps({"left": left, "right": right, "claw": 1 if claw else 0})
         self.cmd_pub.publish(msg)
 
     def _stop(self, claw: bool = False):
@@ -174,14 +177,9 @@ class AutoNode(Node):
     # ── Steering ─────────────────────────────────────────────────
 
     def _steer(self, target: dict | None, claw: bool):
-        """
-        Drive toward target with continuous steering correction.
-        If target is lost for < APPROACH_LOST_SEC, drive straight.
-        """
         spd = self.approach_speed
 
         if target is None:
-            # Lost target briefly — drive straight
             if time.monotonic() - self._last_seen < APPROACH_LOST_SEC:
                 self._send_cmd(spd, spd, claw)
             else:
@@ -192,44 +190,24 @@ class AutoNode(Node):
         correction = min(abs(error) * self.steer_gain, spd * 0.8)
 
         if error > self.dead_zone:
-            # Target is to the right — turn right by slowing right side.
-            left  = int(spd)
-            right = int(spd - correction)
-
+            left, right = int(spd), int(spd - correction)
         elif error < -self.dead_zone:
-            # Target is to the left — turn left by slowing left side.
-            left  = int(spd - correction)
-            right = int(spd)
-
+            left, right = int(spd - correction), int(spd)
         else:
-            # Centered — drive straight.
-            left  = int(spd)
-            right = int(spd)
+            left, right = int(spd), int(spd)
 
         self._send_cmd(left, right, claw)
 
-    def _align_for_capture(self, target: dict, claw: bool):
-        """
-        Fine-align the ball horizontally without driving forward.
-
-        This is used only after the ball center has reached the capture
-        y-zone. At that point, the robot should not keep approaching;
-        it should rotate in place until the ball is centered enough,
-        then the state machine can enter CAPTURE.
-        """
+    def _align_in_place(self, target: dict, claw: bool, x_margin: int):
+        """Rotate in place to center target horizontally."""
         error = target["cx"] - FRAME_CX
         turn  = int(self.align_turn_speed)
 
-        if error > self.capture_x_margin:
-            # Ball is to the right — rotate right in place.
+        if error > x_margin:
             self._send_cmd(turn, -turn, claw)
-
-        elif error < -self.capture_x_margin:
-            # Ball is to the left — rotate left in place.
+        elif error < -x_margin:
             self._send_cmd(-turn, turn, claw)
-
         else:
-            # Centered enough — hold still until transition check fires.
             self._stop(claw)
 
     # ── State machine ────────────────────────────────────────────
@@ -239,13 +217,11 @@ class AutoNode(Node):
         self._state       = new_state
         self._phase_start = time.monotonic()
 
-        # Switch vision mode when entering relevant states
         if new_state in ("SEARCH_BALL", "APPROACH_BALL", "CAPTURE"):
             self._set_detect_mode("ball")
         elif new_state in ("SEARCH_MAT", "APPROACH_MAT", "DEPOSIT"):
             self._set_detect_mode("mat")
 
-        # Publish state for GUI
         msg      = String()
         msg.data = new_state
         self.state_pub.publish(msg)
@@ -254,11 +230,8 @@ class AutoNode(Node):
         return time.monotonic() - self._phase_start
 
     def _tick(self):
-        # Only run state machine when armed and in auto mode
         if not self._armed or self._mode != "auto":
             self._stop(self._claw)
-
-            # Publish state so GUI stays updated
             msg      = String()
             msg.data = self._state
             self.state_pub.publish(msg)
@@ -277,65 +250,37 @@ class AutoNode(Node):
             if t is not None:
                 self._transition("APPROACH_BALL")
             else:
-                # Rotate to search
-                self._send_cmd(
-                    SEARCH_TURN_SPEED,
-                    -SEARCH_TURN_SPEED,
-                    self._claw,
-                )
+                self._send_cmd(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED, self._claw)
 
         # ── APPROACH_BALL ────────────────────────────────────────
         elif self._state == "APPROACH_BALL":
-
             if t is None and time.monotonic() - self._last_seen > APPROACH_LOST_SEC:
-                # Lost ball for too long — go back to search
                 self._transition("SEARCH_BALL")
-
             elif t is None:
-                # Lost ball briefly — keep existing behavior and drive straight
-                # for a short time, handled inside _steer().
                 self._steer(t, self._claw)
-
             else:
                 x_error = t["cx"] - FRAME_CX
-
                 if t["cy"] >= self.ball_capture_cy:
-                    # Ball has reached the capture zone vertically.
-                    # Do not keep driving forward here. First center it.
                     if abs(x_error) <= self.capture_x_margin:
                         self._transition("CAPTURE")
                     else:
-                        self._align_for_capture(t, self._claw)
-
+                        self._align_in_place(t, self._claw, self.capture_x_margin)
                 else:
-                    # Ball is still too far up in the image, so keep approaching.
                     self._steer(t, self._claw)
 
         # ── CAPTURE ──────────────────────────────────────────────
         elif self._state == "CAPTURE":
             elapsed = self._elapsed()
-
             if elapsed < CAPTURE_OPEN_SEC:
-                # Phase 1: stop and open claw
                 self._claw = False
                 self._stop(self._claw)
-
             elif elapsed < CAPTURE_OPEN_SEC + CAPTURE_DRIVE_SEC:
-                # Phase 2: drive forward with claw open
                 self._claw = False
-                self._send_cmd(
-                    self.approach_speed,
-                    self.approach_speed,
-                    self._claw,
-                )
-
+                self._send_cmd(self.approach_speed, self.approach_speed, self._claw)
             elif elapsed < CAPTURE_OPEN_SEC + CAPTURE_DRIVE_SEC + CAPTURE_CLOSE_SEC:
-                # Phase 3: close claw and stop
                 self._claw = True
                 self._stop(self._claw)
-
             else:
-                # Capture complete — search for mat
                 self._transition("SEARCH_MAT")
 
         # ── SEARCH_MAT ───────────────────────────────────────────
@@ -343,39 +288,34 @@ class AutoNode(Node):
             if t is not None:
                 self._transition("APPROACH_MAT")
             else:
-                self._send_cmd(
-                    SEARCH_TURN_SPEED,
-                    -SEARCH_TURN_SPEED,
-                    self._claw,
-                )
+                self._send_cmd(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED, self._claw)
 
         # ── APPROACH_MAT ─────────────────────────────────────────
         elif self._state == "APPROACH_MAT":
-            if t is not None and t["w"] >= MAT_DEPOSIT_WIDTH:
-                self._transition("DEPOSIT")
-
-            elif t is None and time.monotonic() - self._last_seen > APPROACH_LOST_SEC:
+            if t is None and time.monotonic() - self._last_seen > APPROACH_LOST_SEC:
                 self._transition("SEARCH_MAT")
-
-            else:
+            elif t is None:
                 self._steer(t, self._claw)
+            else:
+                x_error = t["cx"] - FRAME_CX
+                if t["cy"] >= self.mat_deposit_cy:
+                    if abs(x_error) <= MAT_X_MARGIN:
+                        self._transition("DEPOSIT")
+                    else:
+                        self._align_in_place(t, self._claw, MAT_X_MARGIN)
+                else:
+                    self._steer(t, self._claw)
 
         # ── DEPOSIT ──────────────────────────────────────────────
         elif self._state == "DEPOSIT":
             elapsed = self._elapsed()
-
             if elapsed < DEPOSIT_OPEN_SEC:
-                # Open claw and stop
                 self._claw = False
                 self._stop(self._claw)
-
             elif elapsed < DEPOSIT_OPEN_SEC + DEPOSIT_BACK_SEC:
-                # Back up
                 spd = self.approach_speed
                 self._send_cmd(-spd, -spd, self._claw)
-
             else:
-                # Task complete
                 self._transition("DONE")
 
         # ── DONE ─────────────────────────────────────────────────
@@ -390,14 +330,12 @@ class AutoNode(Node):
             if hasattr(self, p.name):
                 setattr(self, p.name, p.value)
                 self.get_logger().info(f"Param updated: {p.name} = {p.value}")
-
         return SetParametersResult(successful=True)
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = AutoNode()
-
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

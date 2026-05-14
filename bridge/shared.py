@@ -2,9 +2,10 @@ import json
 import os
 import threading
 
-STATE_FILE  = "/tmp/spider_state.json"
-CTRL_FILE   = "/tmp/spider_ctrl.json"
-PARAMS_FILE = "/tmp/spider_params.json"
+STATE_FILE    = "/tmp/spider_state.json"
+CTRL_FILE     = "/tmp/spider_ctrl.json"
+PARAMS_FILE   = "/tmp/spider_params.json"
+AUTO_CMD_FILE = "/tmp/spider_auto_cmd.json"
 
 _lock = threading.Lock()
 
@@ -50,12 +51,14 @@ DEFAULT_PARAMS = {
         "dirty":       False,
     },
     "path": {
-        "approach_speed": 80,
+        "approach_speed": 65,
         "steer_gain":     0.3,
         "dead_zone":      40,
         "dirty":          False,
     },
 }
+
+DEFAULT_AUTO_CMD = {"state": ""}
 
 
 def _read(path: str, default: dict) -> dict:
@@ -74,13 +77,16 @@ def _write(path: str, data: dict):
         os.replace(tmp, path)
 
 
-def read_state()  -> dict: return _read(STATE_FILE,  DEFAULT_STATE)
-def read_ctrl()   -> dict: return _read(CTRL_FILE,   DEFAULT_CTRL)
-def read_params() -> dict: return _read(PARAMS_FILE, DEFAULT_PARAMS)
+def read_state()    -> dict: return _read(STATE_FILE,    DEFAULT_STATE)
+def read_ctrl()     -> dict: return _read(CTRL_FILE,     DEFAULT_CTRL)
+def read_params()   -> dict: return _read(PARAMS_FILE,   DEFAULT_PARAMS)
+def read_auto_cmd() -> dict: return _read(AUTO_CMD_FILE, DEFAULT_AUTO_CMD)
 
-def write_state(data: dict):  _write(STATE_FILE,  data)
-def write_ctrl(data: dict):   _write(CTRL_FILE,   data)
-def write_params(data: dict): _write(PARAMS_FILE, data)
+def write_state(data: dict):    _write(STATE_FILE,    data)
+def write_ctrl(data: dict):     _write(CTRL_FILE,     data)
+def write_params(data: dict):   _write(PARAMS_FILE,   data)
+def write_auto_cmd(state: str): _write(AUTO_CMD_FILE, {"state": state})
+def clear_auto_cmd():           _write(AUTO_CMD_FILE, {"state": ""})
 
 
 def add_cli(text: str):
@@ -95,6 +101,7 @@ def add_cli(text: str):
 
 
 def init():
-    if not os.path.exists(STATE_FILE):  write_state(DEFAULT_STATE)
-    if not os.path.exists(CTRL_FILE):   write_ctrl(DEFAULT_CTRL)
-    if not os.path.exists(PARAMS_FILE): write_params(DEFAULT_PARAMS)
+    if not os.path.exists(STATE_FILE):    write_state(DEFAULT_STATE)
+    if not os.path.exists(CTRL_FILE):     write_ctrl(DEFAULT_CTRL)
+    if not os.path.exists(PARAMS_FILE):   write_params(DEFAULT_PARAMS)
+    if not os.path.exists(AUTO_CMD_FILE): _write(AUTO_CMD_FILE, DEFAULT_AUTO_CMD)

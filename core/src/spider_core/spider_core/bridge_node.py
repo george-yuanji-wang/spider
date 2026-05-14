@@ -1,8 +1,5 @@
 """
 bridge_node — pure ROS2 node, no HTTP server.
-
-Reads ctrl  from /tmp/spider_ctrl.json   (written by HTTP server)
-Writes tel  to   /tmp/spider_state.json  (read by HTTP server)
 """
 
 import json
@@ -37,20 +34,22 @@ class BridgeNode(Node):
         shared.init()
 
         # ── Subscribers ──────────────────────────────────────────
-        self.create_subscription(String,  "vision/target", self._on_vision,      10)
-        self.create_subscription(String,  "path",          self._on_path,        10)
-        self.create_subscription(String,  "auto/state",    self._on_auto_state,  10)
-        self.create_subscription(Float32, "camera/fps",    self._on_camera_fps,  10)
-        self.create_subscription(Float32, "vision/fps",    self._on_vision_fps,  10)
-        self.create_subscription(Float32, "path/fps",      self._on_path_fps,    10)
+        self.create_subscription(String,  "vision/target", self._on_vision,     10)
+        self.create_subscription(String,  "path",          self._on_path,       10)
+        self.create_subscription(String,  "auto/state",    self._on_auto_state, 10)
+        self.create_subscription(Float32, "camera/fps",    self._on_camera_fps, 10)
+        self.create_subscription(Float32, "vision/fps",    self._on_vision_fps, 10)
+        self.create_subscription(Float32, "path/fps",      self._on_path_fps,   10)
 
         # ── Publishers ───────────────────────────────────────────
-        self.ctrl_pub = self.create_publisher(String, "spider/ctrl", 10)
+        self.ctrl_pub      = self.create_publisher(String, "spider/ctrl",    10)
+        self.set_state_pub = self.create_publisher(String, "auto/set_state", 10)
 
         # ── Timers ───────────────────────────────────────────────
         self.create_timer(0.05, self._publish_ctrl)
         self.create_timer(1.0,  self._check_liveness)
         self.create_timer(0.5,  self._push_params)
+        self.create_timer(0.1,  self._poll_auto_cmd)   # 10Hz auto cmd check
 
         state = shared.read_state()
         state["tel"]["connected"] = True
@@ -115,6 +114,19 @@ class BridgeNode(Node):
         msg.data = json.dumps(ctrl)
         self.ctrl_pub.publish(msg)
 
+    # ── Auto state override ──────────────────────────────────────
+
+    def _poll_auto_cmd(self):
+        cmd = shared.read_auto_cmd()
+        state = cmd.get("state", "")
+        if not state:
+            return
+        msg      = String()
+        msg.data = state
+        self.set_state_pub.publish(msg)
+        shared.clear_auto_cmd()
+        self.get_logger().info(f"Auto state override published: {state}")
+
     # ── Node liveness ────────────────────────────────────────────
 
     def _check_liveness(self):
@@ -140,7 +152,6 @@ class BridgeNode(Node):
     def _push_params(self):
         params = shared.read_params()
 
-        # Ball / vision params
         ball = params.get("ball", {})
         if ball.get("dirty", False):
             ball["dirty"] = False
@@ -163,7 +174,6 @@ class BridgeNode(Node):
                 self.get_logger().info("Vision params pushed")
                 shared.add_cli("Vision params applied")
 
-        # Path / auto params
         path = params.get("path", {})
         if path.get("dirty", False):
             path["dirty"] = False

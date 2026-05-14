@@ -46,6 +46,10 @@ class ParamsPayload(BaseModel):
     path: PathParamsPayload
 
 
+class AutoStatePayload(BaseModel):
+    state: str
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True}
@@ -96,10 +100,15 @@ def post_params(payload: ParamsPayload):
     shared.add_cli(
         f"Params updated — "
         f"H:{b.hue_low}-{b.hue_high} "
-        f"S:{b.sat_low}-{b.sat_high} "
-        f"V:{b.val_low}-{b.val_high} "
         f"spd:{p.approach_speed} gain:{p.steer_gain} dz:{p.dead_zone}"
     )
+    return {"ok": True}
+
+
+@app.post("/api/auto/state")
+def post_auto_state(payload: AutoStatePayload):
+    shared.write_auto_cmd(payload.state)
+    shared.add_cli(f"Auto state override → {payload.state}")
     return {"ok": True}
 
 

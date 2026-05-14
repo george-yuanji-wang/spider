@@ -30,7 +30,7 @@ export const defaultParams: Params = {
     val_low:     80,
     val_high:    255,
     min_radius:  8,
-    blur_kernel: 7,
+    blur_kernel: 2,
     dilate_iter: 1,
   },
   path: {

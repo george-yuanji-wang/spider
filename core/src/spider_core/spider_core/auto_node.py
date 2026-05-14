@@ -57,7 +57,7 @@ CAPTURE_X_MARGIN    = 45
 ALIGN_TURN_SPEED    = 50
 
 # ── Mat deposit thresholds ───────────────────────────────────────
-MAT_DEPOSIT_CY      = 420   # same logic as ball — cy below this → deposit zone
+MAT_DEPOSIT_CY      = 400   # same logic as ball — cy below this → deposit zone
 MAT_X_MARGIN        = 60    # slightly looser margin for mat
 
 FRAME_CX            = 320

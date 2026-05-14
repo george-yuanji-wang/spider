@@ -1,8 +1,8 @@
-[INFO] [1777928126.573246214] [path_plan]: path_plan node ready (placeholder)
+[INFO] [1777928130.694384219] [stream_node]: Stream node ready — http://<pi-ip>:8001/stream
 Traceback (most recent call last):
-  File "/home/spider/spider/core/install/spider_core/lib/spider_core/path_plan_node", line 33, in <module>
-    sys.exit(load_entry_point('spider-core', 'console_scripts', 'path_plan_node')())
-  File "/home/spider/spider/core/build/spider_core/spider_core/path_plan_node.py", line 116, in main
+  File "/home/spider/spider/core/install/spider_core/lib/spider_core/stream_node", line 33, in <module>
+    sys.exit(load_entry_point('spider-core', 'console_scripts', 'stream_node')())
+  File "/home/spider/spider/core/build/spider_core/spider_core/stream_node.py", line 175, in main
     rclpy.shutdown()
   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/__init__.py", line 130, in shutdown
     _shutdown(context=context)

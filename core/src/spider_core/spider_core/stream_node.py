@@ -25,7 +25,7 @@ from sensor_msgs.msg import Image
 
 STREAM_PORT    = 8001
 JPEG_QUALITY   = 80      # 0-100, lower = faster, higher = better quality
-TARGET_FPS     = 15      # cap stream FPS to avoid overwhelming network
+TARGET_FPS     = 10      # cap stream FPS to avoid overwhelming network
 FRAME_INTERVAL = 1.0 / TARGET_FPS
 
 # ── Shared latest frame ───────────────────────────────────────────

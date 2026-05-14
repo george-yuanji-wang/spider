@@ -1,6 +1,6 @@
-[INFO] [1777833556.417820885] [motor_node]: Motor node ready
+[INFO] [1777928127.352025847] [motor_node]: Motor node ready
 Traceback (most recent call last):
-  File "/home/spider/spider/core/build/spider_core/spider_core/motor_node.py", line 139, in main
+  File "/home/spider/spider/core/build/spider_core/spider_core/motor_node.py", line 144, in main
     rclpy.spin(node)
   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/__init__.py", line 229, in spin
     executor.spin_once()
@@ -19,7 +19,7 @@ During handling of the above exception, another exception occurred:
 Traceback (most recent call last):
   File "/home/spider/spider/core/install/spider_core/lib/spider_core/motor_node", line 33, in <module>
     sys.exit(load_entry_point('spider-core', 'console_scripts', 'motor_node')())
-  File "/home/spider/spider/core/build/spider_core/spider_core/motor_node.py", line 144, in main
+  File "/home/spider/spider/core/build/spider_core/spider_core/motor_node.py", line 149, in main
     rclpy.shutdown()
   File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/__init__.py", line 130, in shutdown
     _shutdown(context=context)

@@ -112,10 +112,11 @@ export default function JoystickPanel() {
   const speedKeyRef   = useRef<"q" | "e" | null>(null);
   const joystickRef   = useRef(false);
 
-  const joystickActive    = ctrl.armed && joystickEnabled;
-  joystickRef.current     = joystickActive;
+  const isAuto         = ctrl.mode === "auto";
+  const armed          = ctrl.armed;
+  const joystickActive = armed && joystickEnabled && !isAuto;
+  joystickRef.current  = joystickActive;
 
-  /* Direction → ctrl */
   useEffect(() => {
     if (!joystickActive) return;
     const computed = mode === "dpad"
@@ -124,13 +125,11 @@ export default function JoystickPanel() {
     setCtrl(c => ({ ...c, input_left: computed.left, input_right: computed.right }));
   }, [joystickActive, mode, activeDir, analogPos]);
 
-  /* Speed bar */
   const handleSpeedChange = (v: number) => {
     if (!joystickActive) return;
     setCtrl(c => ({ ...c, speed: v }));
   };
 
-  /* Q/E */
   const clearSpeedHold = () => {
     if (holdTimeout.current)  { clearTimeout(holdTimeout.current);   holdTimeout.current  = null; }
     if (holdInterval.current) { clearInterval(holdInterval.current); holdInterval.current = null; }
@@ -146,15 +145,21 @@ export default function JoystickPanel() {
     const apply = () => {
       const ms   = Date.now() - holdStartTime.current;
       const step = ms < 1000 ? 1 : ms < 2500 ? 2 : 3;
-      setCtrl(c => ({ ...c, speed: key === "e" ? Math.min(100, c.speed + step) : Math.max(0, c.speed - step) }));
+      setCtrl(c => ({
+        ...c,
+        speed: key === "e" ? Math.min(100, c.speed + step) : Math.max(0, c.speed - step),
+      }));
     };
     apply();
-    holdTimeout.current = setTimeout(() => { holdInterval.current = setInterval(apply, 140); }, 600);
+    holdTimeout.current = setTimeout(() => {
+      holdInterval.current = setInterval(apply, 140);
+    }, 600);
   };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
+      if (isAuto) return;
       if (Object.keys(KEY_MAP).includes(key)) {
         if (!joystickRef.current) return;
         e.preventDefault();
@@ -177,21 +182,19 @@ export default function JoystickPanel() {
       window.removeEventListener("keyup",   onKeyUp);
       clearSpeedHold();
     };
-  }, [mode]);
+  }, [mode, isAuto]);
 
-  /* Arm toggle */
   const handleArmToggle = () => {
     const newArmed = !ctrl.armed;
     if (newArmed) {
       setCtrl(c => ({ ...c, armed: true }));
-      addMessage("ARM - ready to drive");
+      addMessage("ARM enabled");
     } else {
       setCtrl(c => ({ ...c, armed: false, input_left: 0, input_right: 0, speed: 50 }));
-      addMessage("DISARM — inputs reset");
+      addMessage("ARM disabled — inputs reset");
     }
   };
 
-  /* Joystick toggle */
   const handleJoystickToggle = () => {
     const newEnabled = !joystickEnabled;
     setJoystickEnabled(newEnabled);
@@ -203,7 +206,6 @@ export default function JoystickPanel() {
     }
   };
 
-  /* Manual send */
   const handleSend = () => {
     const l = parseInt(manualL,   10) || 0;
     const r = parseInt(manualR,   10) || 0;
@@ -212,7 +214,6 @@ export default function JoystickPanel() {
     addMessage(`Manual drive — L:${l}  R:${r}  S:${s}`);
   };
 
-  /* Manual reset */
   const handleReset = () => {
     setManualL("0");
     setManualR("0");
@@ -226,25 +227,75 @@ export default function JoystickPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ padding: "4px 12px", boxSizing: "border-box", width: "440px", flexShrink: 0 }}>
+    <div
+      className="flex flex-col h-full"
+      style={{ padding: "4px 12px", boxSizing: "border-box", width: "440px", flexShrink: 0, position: "relative" }}
+    >
 
+      {/* Auto mode overlay */}
+      {isAuto && (
+        <div style={{
+          position:        "absolute",
+          inset:           0,
+          backgroundColor: "rgba(30,27,23,0.75)",
+          zIndex:          10,
+          display:         "flex",
+          alignItems:      "center",
+          justifyContent:  "center",
+          borderRadius:    "4px",
+        }}>
+          <span style={{
+            fontFamily:    "StackSansNotch-Medium, sans-serif",
+            fontSize:      "11px",
+            letterSpacing: "0.15em",
+            color:         "#C38D4F",
+            textTransform: "uppercase",
+          }}>
+            Auto Mode Active
+          </span>
+        </div>
+      )}
+
+      {/* Title */}
       <span style={{ fontFamily: "StackSansNotch-SemiBold, sans-serif", fontSize: "13px", letterSpacing: "0.12em", color: "#D8CFC0", textTransform: "uppercase", marginBottom: "4px" }}>
         Joystick
       </span>
 
+      {/* Main content row */}
       <div className="flex flex-row flex-1 overflow-hidden" style={{ gap: "16px" }}>
 
         {/* Pad */}
-        <div style={{ opacity: joystickActive ? 1 : 0.3, pointerEvents: joystickActive ? "auto" : "none", transition: "opacity 0.25s", display: "flex", alignItems: "center", flexShrink: 0, width: "210px" }}>
+        <div style={{
+          opacity:       joystickActive ? 1 : 0.3,
+          pointerEvents: joystickActive ? "auto" : "none",
+          transition:    "opacity 0.25s",
+          display:       "flex",
+          alignItems:    "center",
+          flexShrink:    0,
+          width:         "210px",
+        }}>
           {mode === "dpad" ? (
-            <DPad activeDir={activeDir} onPress={dir => setActiveDir(dir)} onRelease={() => setActiveDir(getDirection(pressedKeys.current))} />
+            <DPad
+              activeDir={activeDir}
+              onPress={dir => setActiveDir(dir)}
+              onRelease={() => setActiveDir(getDirection(pressedKeys.current))}
+            />
           ) : (
             <AnalogStick size={210} onChange={(x, y) => setAnalogPos({ x, y })} />
           )}
         </div>
 
         {/* Speed bar */}
-        <div style={{ opacity: joystickActive ? 1 : 0.3, pointerEvents: joystickActive ? "auto" : "none", transition: "opacity 0.25s", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, width: "32px" }}>
+        <div style={{
+          opacity:        joystickActive ? 1 : 0.3,
+          pointerEvents:  joystickActive ? "auto" : "none",
+          transition:     "opacity 0.25s",
+          display:        "flex",
+          alignItems:     "center",
+          justifyContent: "center",
+          flexShrink:     0,
+          width:          "32px",
+        }}>
           <SpeedBar value={ctrl.speed} onChange={handleSpeedChange} height={210} />
         </div>
 
@@ -268,7 +319,11 @@ export default function JoystickPanel() {
 
           <div style={{ height: "1px", backgroundColor: "#2A2420" }} />
 
-          <div style={{ opacity: ctrl.armed ? 1 : 0.3, pointerEvents: ctrl.armed ? "auto" : "none", transition: "opacity 0.25s" }}>
+          <div style={{
+            opacity:       armed && !isAuto ? 1 : 0.3,
+            pointerEvents: armed && !isAuto ? "auto" : "none",
+            transition:    "opacity 0.25s",
+          }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               <div style={{ display: "flex", gap: "4px" }}>
                 <NumInput label="Left"  value={manualL}   min={-100} max={100} onChange={setManualL}   />
@@ -298,7 +353,7 @@ export default function JoystickPanel() {
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-          <Toggle label="ARM"      enabled={ctrl.armed}      onToggle={handleArmToggle}      />
+          <Toggle label="ARM"      enabled={armed}           onToggle={handleArmToggle}      />
           <Toggle label="JOYSTICK" enabled={joystickEnabled} onToggle={handleJoystickToggle} />
         </div>
       </div>

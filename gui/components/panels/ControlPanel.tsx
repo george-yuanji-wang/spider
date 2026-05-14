@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect }  from "react";
+import { useState, useEffect } from "react";
 import { useCtrl }       from "@/context/CtrlContext";
 import { useParams }     from "@/context/ParamsContext";
 import { useCli }        from "@/context/CliContext";
@@ -31,6 +31,14 @@ function clampInput(raw: string, min: number, max: number): string | null {
   return String(Math.max(min, Math.min(max, n)));
 }
 
+function clampFloat(raw: string, min: number, max: number): string | null {
+  const f = raw.replace(/[^0-9.]/g, "");
+  if (f === "") return "";
+  const n = parseFloat(f);
+  if (isNaN(n)) return null;
+  return String(Math.max(min, Math.min(max, n)));
+}
+
 function RangeInput({ label, low, high, min, max, onLow, onHigh }: {
   label: string; low: string; high: string;
   min: number; max: number;
@@ -52,11 +60,11 @@ function RangeInput({ label, low, high, min, max, onLow, onHigh }: {
   );
 }
 
-function SingleInput({ label, value, min, max, onChange }: {
-  label: string; value: string; min: number; max: number; onChange: (v: string) => void;
+function SingleInput({ label, value, min, max, onChange, isFloat }: {
+  label: string; value: string; min: number; max: number; onChange: (v: string) => void; isFloat?: boolean;
 }) {
   const handle = (raw: string) => {
-    const result = clampInput(raw, min, max);
+    const result = isFloat ? clampFloat(raw, min, max) : clampInput(raw, min, max);
     if (result !== null) onChange(result);
   };
   return (
@@ -87,23 +95,29 @@ export default function ControlPanel() {
   const { addMessage }        = useCli();
 
   const b = params.ball;
+  const p = params.path;
+
   const [draft, setDraft] = useState({
-    hue_low:     String(b.hue_low),
-    hue_high:    String(b.hue_high),
-    sat_low:     String(b.sat_low),
-    sat_high:    String(b.sat_high),
-    val_low:     String(b.val_low),
-    val_high:    String(b.val_high),
-    min_radius:  String(b.min_radius),
-    blur_kernel: String(b.blur_kernel),
-    dilate_iter: String(b.dilate_iter),
+    hue_low:        String(b.hue_low),
+    hue_high:       String(b.hue_high),
+    sat_low:        String(b.sat_low),
+    sat_high:       String(b.sat_high),
+    val_low:        String(b.val_low),
+    val_high:       String(b.val_high),
+    min_radius:     String(b.min_radius),
+    blur_kernel:    String(b.blur_kernel),
+    dilate_iter:    String(b.dilate_iter),
+    approach_speed: String(p.approach_speed),
+    steer_gain:     String(p.steer_gain),
+    dead_zone:      String(p.dead_zone),
   });
 
   const f = (key: keyof typeof draft) => (v: string) => setDraft(d => ({ ...d, [key]: v }));
 
-  /* I/O keyboard for claw */
+  /* I/O keyboard for claw — disabled in auto */
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (ctrl.mode === "auto") return;
       if (e.key.toLowerCase() === "o") {
         setCtrl(c => ({ ...c, claw: false }));
         addMessage("Claw: open");
@@ -115,34 +129,63 @@ export default function ControlPanel() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [ctrl.mode]);
 
   const handleSend = () => {
-    const n = (k: keyof typeof draft) => parseInt(draft[k], 10) || 0;
-    const u = {
-      hue_low:     n("hue_low"),    hue_high:    n("hue_high"),
-      sat_low:     n("sat_low"),    sat_high:    n("sat_high"),
-      val_low:     n("val_low"),    val_high:    n("val_high"),
-      min_radius:  n("min_radius"),
-      blur_kernel: n("blur_kernel"),
-      dilate_iter: n("dilate_iter"),
+    const ni = (k: keyof typeof draft) => parseInt(draft[k],   10) || 0;
+    const nf = (k: keyof typeof draft) => parseFloat(draft[k]) || 0;
+
+    const ballUpdated = {
+      hue_low:     ni("hue_low"),    hue_high:    ni("hue_high"),
+      sat_low:     ni("sat_low"),    sat_high:    ni("sat_high"),
+      val_low:     ni("val_low"),    val_high:    ni("val_high"),
+      min_radius:  ni("min_radius"),
+      blur_kernel: ni("blur_kernel"),
+      dilate_iter: ni("dilate_iter"),
     };
-    setParams(p => ({ ...p, ball: u }));
-    addMessage(`Ball params — H:${u.hue_low}-${u.hue_high} S:${u.sat_low}-${u.sat_high} V:${u.val_low}-${u.val_high} r:${u.min_radius} k:${u.blur_kernel} d:${u.dilate_iter}`);
+    const pathUpdated = {
+      approach_speed: ni("approach_speed"),
+      steer_gain:     nf("steer_gain"),
+      dead_zone:      ni("dead_zone"),
+    };
+
+    setParams(prev => ({ ...prev, ball: ballUpdated, path: pathUpdated }));
+
+    fetch("/api/params", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ ball: ballUpdated, path: pathUpdated }),
+    }).catch(() => {});
+
+    addMessage(
+      `Params — H:${ballUpdated.hue_low}-${ballUpdated.hue_high} ` +
+      `spd:${pathUpdated.approach_speed} gain:${pathUpdated.steer_gain} dz:${pathUpdated.dead_zone}`
+    );
   };
 
   const handleReset = () => {
-    const d = defaultParams.ball;
+    const d = defaultParams;
     setDraft({
-      hue_low:     String(d.hue_low),    hue_high:    String(d.hue_high),
-      sat_low:     String(d.sat_low),    sat_high:    String(d.sat_high),
-      val_low:     String(d.val_low),    val_high:    String(d.val_high),
-      min_radius:  String(d.min_radius),
-      blur_kernel: String(d.blur_kernel),
-      dilate_iter: String(d.dilate_iter),
+      hue_low:        String(d.ball.hue_low),
+      hue_high:       String(d.ball.hue_high),
+      sat_low:        String(d.ball.sat_low),
+      sat_high:       String(d.ball.sat_high),
+      val_low:        String(d.ball.val_low),
+      val_high:       String(d.ball.val_high),
+      min_radius:     String(d.ball.min_radius),
+      blur_kernel:    String(d.ball.blur_kernel),
+      dilate_iter:    String(d.ball.dilate_iter),
+      approach_speed: String(d.path.approach_speed),
+      steer_gain:     String(d.path.steer_gain),
+      dead_zone:      String(d.path.dead_zone),
     });
-    setParams(p => ({ ...p, ball: { ...d } }));
-    addMessage("Ball params reset to defaults");
+    setParams(d);
+    fetch("/api/params", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ ball: d.ball, path: d.path }),
+    }).catch(() => {});
+    addMessage("All params reset to defaults");
   };
 
   const handleModeChange = (m: DriveMode) => {
@@ -154,6 +197,13 @@ export default function ControlPanel() {
     setCtrl(c => ({ ...c, claw: closed }));
     addMessage(`Claw: ${closed ? "closed" : "open"}`);
   };
+
+  const isAuto    = ctrl.mode === "auto";
+  const clawStyle = {
+    opacity:       isAuto ? 0.3 : 1,
+    pointerEvents: isAuto ? "none" : "auto",
+    transition:    "opacity 0.25s",
+  } as React.CSSProperties;
 
   return (
     <div style={{
@@ -210,11 +260,13 @@ export default function ControlPanel() {
             <ColDivider />
 
             {/* Path */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0, width: "70px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px", flexShrink: 0 }}>
               <SectionLabel>Path</SectionLabel>
-              <span style={{ fontFamily: "StackSansNotch-ExtraLight, sans-serif", fontSize: "9px", color: "#3E3830" }}>
-                Not configured
-              </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <SingleInput label="Speed" value={draft.approach_speed} min={0}   max={100} onChange={f("approach_speed")}             />
+                <SingleInput label="Gain"  value={draft.steer_gain}     min={0}   max={10}  onChange={f("steer_gain")} isFloat          />
+                <SingleInput label="D-Zone" value={draft.dead_zone}     min={0}   max={160} onChange={f("dead_zone")}                  />
+              </div>
             </div>
 
             <ColDivider />
@@ -222,16 +274,10 @@ export default function ControlPanel() {
             {/* Apply */}
             <div style={{ display: "flex", flexDirection: "column", gap: "5px", flexShrink: 0, alignItems: "flex-start" }}>
               <SectionLabel>Apply</SectionLabel>
-              <button
-                onClick={handleSend}
-                style={{ width: "56px", padding: "4px 0", backgroundColor: "#1E1B17", border: "1.5px solid #516067", borderRadius: "4px", color: "#D8CFC0", fontFamily: "StackSansNotch-Medium, sans-serif", fontSize: "10px", letterSpacing: "0.1em", cursor: "pointer" }}
-              >
+              <button onClick={handleSend} style={{ width: "56px", padding: "4px 0", backgroundColor: "#1E1B17", border: "1.5px solid #516067", borderRadius: "4px", color: "#D8CFC0", fontFamily: "StackSansNotch-Medium, sans-serif", fontSize: "10px", letterSpacing: "0.1em", cursor: "pointer" }}>
                 SEND
               </button>
-              <button
-                onClick={handleReset}
-                style={{ width: "56px", padding: "4px 0", backgroundColor: "transparent", border: "1.5px solid #516067", borderRadius: "4px", color: "#516067", fontFamily: "StackSansNotch-Bold, sans-serif", fontSize: "12px", cursor: "pointer" }}
-              >
+              <button onClick={handleReset} style={{ width: "56px", padding: "4px 0", backgroundColor: "transparent", border: "1.5px solid #516067", borderRadius: "4px", color: "#516067", fontFamily: "StackSansNotch-Bold, sans-serif", fontSize: "12px", cursor: "pointer" }}>
                 ↺
               </button>
             </div>
@@ -243,7 +289,7 @@ export default function ControlPanel() {
         <ColDivider />
 
         {/* Claw */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", flexShrink: 0, width: "90px", padding: "0 12px" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", flexShrink: 0, width: "90px", padding: "0 12px", ...clawStyle }}>
           <span style={{ fontFamily: "StackSansNotch-SemiBold, sans-serif", fontSize: "13px", letterSpacing: "0.12em", color: "#D8CFC0", textTransform: "uppercase" }}>
             Claw
           </span>

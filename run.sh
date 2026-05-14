@@ -54,13 +54,13 @@ echo "[spider] Starting camera_node..."
 ros2 run spider_core camera_node \
     > "$LOG_DIR/camera.log" 2>&1 &
 
-echo "[spider] Starting ball_track_node..."
-ros2 run spider_core ball_track_node \
-    > "$LOG_DIR/ball_track.log" 2>&1 &
+echo "[spider] Starting vision_node..."
+ros2 run spider_core vision_node \
+    > "$LOG_DIR/vision.log" 2>&1 &
 
-echo "[spider] Starting path_plan_node..."
-ros2 run spider_core path_plan_node \
-    > "$LOG_DIR/path_plan.log" 2>&1 &
+echo "[spider] Starting auto_node..."
+ros2 run spider_core auto_node \
+    > "$LOG_DIR/auto.log" 2>&1 &
 
 echo "[spider] Starting motor_node..."
 ros2 run spider_core motor_node \

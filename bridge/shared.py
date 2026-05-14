@@ -19,6 +19,8 @@ DEFAULT_STATE = {
         "camera_fps":     0.0,
         "tracker_fps":    0.0,
         "planner_fps":    0.0,
+        "auto_state":     "IDLE",
+        "detect_mode":    "ball",
         "ball":           None,
         "path":           [],
     },
@@ -31,7 +33,7 @@ DEFAULT_CTRL = {
     "input_left":  0,
     "input_right": 0,
     "speed":       50,
-    "claw":       False,
+    "claw":        False,
 }
 
 DEFAULT_PARAMS = {
@@ -46,7 +48,13 @@ DEFAULT_PARAMS = {
         "blur_kernel": 7,
         "dilate_iter": 1,
         "dirty":       False,
-    }
+    },
+    "path": {
+        "approach_speed": 40,
+        "steer_gain":     0.3,
+        "dead_zone":      40,
+        "dirty":          False,
+    },
 }
 
 

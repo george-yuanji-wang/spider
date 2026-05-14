@@ -10,20 +10,32 @@ export interface BallTrackParams {
   dilate_iter: number;
 }
 
+export interface PathParams {
+  approach_speed: number;
+  steer_gain:     number;
+  dead_zone:      number;
+}
+
 export interface Params {
   ball: BallTrackParams;
+  path: PathParams;
 }
 
 export const defaultParams: Params = {
   ball: {
     hue_low:     90,
-    hue_high:    106,
-    sat_low:     100,
-    sat_high:    220,
-    val_low:     100,
+    hue_high:    115,
+    sat_low:     80,
+    sat_high:    255,
+    val_low:     80,
     val_high:    255,
     min_radius:  8,
-    blur_kernel: 2,
+    blur_kernel: 7,
     dilate_iter: 1,
+  },
+  path: {
+    approach_speed: 40,
+    steer_gain:     0.3,
+    dead_zone:      40,
   },
 };

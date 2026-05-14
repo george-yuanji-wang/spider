@@ -30,12 +30,12 @@ setup(
             'ball_display = spider_core.ball_display:main',
 
             # ── New nodes ────────────────────────────────────────
-            'camera_node     = spider_core.camera_node:main',
-            'ball_track_node = spider_core.ball_track_node:main',
-            'path_plan_node  = spider_core.path_plan_node:main',
-            'motor_node      = spider_core.motor_node:main',
-            'bridge_node     = spider_core.bridge_node:main',
-            'stream_node     = spider_core.stream_node:main',
+            'camera_node  = spider_core.camera_node:main',
+            'vision_node  = spider_core.vision_node:main',
+            'auto_node    = spider_core.auto_node:main',
+            'motor_node   = spider_core.motor_node:main',
+            'bridge_node  = spider_core.bridge_node:main',
+            'stream_node  = spider_core.stream_node:main',
         ],
     },
 )

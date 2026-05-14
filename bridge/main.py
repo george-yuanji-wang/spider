@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import shared
+import bridge.shared as shared
 
 shared.init()
 
@@ -20,7 +20,7 @@ class CtrlPayload(BaseModel):
     input_left:  int
     input_right: int
     speed:       int
-    claw:       bool
+    claw:        bool
 
 
 class BallParamsPayload(BaseModel):
@@ -35,8 +35,15 @@ class BallParamsPayload(BaseModel):
     dilate_iter: int
 
 
+class PathParamsPayload(BaseModel):
+    approach_speed: int
+    steer_gain:     float
+    dead_zone:      int
+
+
 class ParamsPayload(BaseModel):
     ball: BallParamsPayload
+    path: PathParamsPayload
 
 
 @app.get("/api/health")
@@ -65,6 +72,7 @@ def post_ctrl(payload: CtrlPayload):
 @app.post("/api/params")
 def post_params(payload: ParamsPayload):
     b = payload.ball
+    p = payload.path
     shared.write_params({
         "ball": {
             "hue_low":     b.hue_low,
@@ -77,14 +85,20 @@ def post_params(payload: ParamsPayload):
             "blur_kernel": b.blur_kernel,
             "dilate_iter": b.dilate_iter,
             "dirty":       True,
-        }
+        },
+        "path": {
+            "approach_speed": p.approach_speed,
+            "steer_gain":     p.steer_gain,
+            "dead_zone":      p.dead_zone,
+            "dirty":          True,
+        },
     })
     shared.add_cli(
-        f"Ball params updated — "
+        f"Params updated — "
         f"H:{b.hue_low}-{b.hue_high} "
         f"S:{b.sat_low}-{b.sat_high} "
         f"V:{b.val_low}-{b.val_high} "
-        f"r:{b.min_radius} k:{b.blur_kernel} d:{b.dilate_iter}"
+        f"spd:{p.approach_speed} gain:{p.steer_gain} dz:{p.dead_zone}"
     )
     return {"ok": True}
 

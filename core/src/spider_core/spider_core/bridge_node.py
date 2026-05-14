@@ -3,10 +3,6 @@ bridge_node — pure ROS2 node, no HTTP server.
 
 Reads ctrl  from /tmp/spider_ctrl.json   (written by HTTP server)
 Writes tel  to   /tmp/spider_state.json  (read by HTTP server)
-
-Run alongside HTTP server as two separate processes:
-    Terminal 1: ros2 run spider_core bridge_node
-    Terminal 2: python -m uvicorn bridge.main:app --host 0.0.0.0 --port 8000
 """
 
 import json
@@ -26,10 +22,10 @@ shared = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(shared)
 
 WATCHED_NODES = {
-    "camera":     "camera_status",
-    "ball_track": "tracker_status",
-    "path_plan":  "planner_status",
-    "motor_node": "motor_status",
+    "camera":      "camera_status",
+    "vision_node": "tracker_status",
+    "auto_node":   "planner_status",
+    "motor_node":  "motor_status",
     "stream_node": "stream_status",
 }
 
@@ -41,19 +37,20 @@ class BridgeNode(Node):
         shared.init()
 
         # ── Subscribers ──────────────────────────────────────────
-        self.create_subscription(String,  "ball",       self._on_ball,       10)
-        self.create_subscription(String,  "path",       self._on_path,       10)
-        self.create_subscription(Float32, "camera/fps", self._on_camera_fps, 10)
-        self.create_subscription(Float32, "ball/fps",   self._on_ball_fps,   10)
-        self.create_subscription(Float32, "path/fps",   self._on_path_fps,   10)
+        self.create_subscription(String,  "vision/target", self._on_vision,      10)
+        self.create_subscription(String,  "path",          self._on_path,        10)
+        self.create_subscription(String,  "auto/state",    self._on_auto_state,  10)
+        self.create_subscription(Float32, "camera/fps",    self._on_camera_fps,  10)
+        self.create_subscription(Float32, "vision/fps",    self._on_vision_fps,  10)
+        self.create_subscription(Float32, "path/fps",      self._on_path_fps,    10)
 
         # ── Publishers ───────────────────────────────────────────
         self.ctrl_pub = self.create_publisher(String, "spider/ctrl", 10)
 
         # ── Timers ───────────────────────────────────────────────
-        self.create_timer(0.05, self._publish_ctrl)    # 20Hz
-        self.create_timer(1.0,  self._check_liveness)  # 1Hz
-        self.create_timer(0.5,  self._push_params)     # 2Hz
+        self.create_timer(0.05, self._publish_ctrl)
+        self.create_timer(1.0,  self._check_liveness)
+        self.create_timer(0.5,  self._push_params)
 
         state = shared.read_state()
         state["tel"]["connected"] = True
@@ -64,21 +61,21 @@ class BridgeNode(Node):
 
     # ── Subscribers ──────────────────────────────────────────────
 
-    def _on_ball(self, msg: String):
+    def _on_vision(self, msg: String):
         raw   = msg.data.strip()
         state = shared.read_state()
         if raw in ("none", ""):
             state["tel"]["ball"] = None
         else:
             try:
-                cx, cy, x, y, w, h    = [float(v) for v in raw.split(",")]
-                state["tel"]["ball"]  = {
+                cx, cy, x, y, w, h = [float(v) for v in raw.split(",")]
+                state["tel"]["ball"] = {
                     "cx": cx, "cy": cy,
                     "x":  x,  "y":  y,
                     "w":  w,  "h":  h,
                 }
             except ValueError:
-                self.get_logger().warn(f"Malformed ball: {raw}")
+                self.get_logger().warn(f"Malformed vision/target: {raw}")
                 state["tel"]["ball"] = None
         shared.write_state(state)
 
@@ -90,12 +87,17 @@ class BridgeNode(Node):
             state["tel"]["path"] = []
         shared.write_state(state)
 
+    def _on_auto_state(self, msg: String):
+        state = shared.read_state()
+        state["tel"]["auto_state"] = msg.data.strip()
+        shared.write_state(state)
+
     def _on_camera_fps(self, msg: Float32):
         state = shared.read_state()
         state["tel"]["camera_fps"] = round(msg.data, 1)
         shared.write_state(state)
 
-    def _on_ball_fps(self, msg: Float32):
+    def _on_vision_fps(self, msg: Float32):
         state = shared.read_state()
         state["tel"]["tracker_fps"] = round(msg.data, 1)
         shared.write_state(state)
@@ -137,31 +139,52 @@ class BridgeNode(Node):
 
     def _push_params(self):
         params = shared.read_params()
-        ball   = params.get("ball", {})
-        if not ball.get("dirty", False):
-            return
 
-        ball["dirty"] = False
-        shared.write_params({"ball": ball})
+        # Ball / vision params
+        ball = params.get("ball", {})
+        if ball.get("dirty", False):
+            ball["dirty"] = False
+            shared.write_params({**params, "ball": ball})
+            push = {k: v for k, v in ball.items() if k != "dirty"}
+            failed = False
+            for name, value in push.items():
+                try:
+                    subprocess.Popen(
+                        ["ros2", "param", "set", "/vision_node", name, str(value)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                except Exception as e:
+                    self.get_logger().warn(f"Vision param push failed {name}: {e}")
+                    shared.add_cli(f"Vision param push failed: {name}")
+                    failed = True
+                    break
+            if not failed:
+                self.get_logger().info("Vision params pushed")
+                shared.add_cli("Vision params applied")
 
-        push   = {k: v for k, v in ball.items() if k != "dirty"}
-        failed = False
-        for name, value in push.items():
-            try:
-                subprocess.Popen(
-                    ["ros2", "param", "set", "/ball_track", name, str(value)],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-            except Exception as e:
-                self.get_logger().warn(f"Param push failed {name}: {e}")
-                shared.add_cli(f"Param push failed: {name}")
-                failed = True
-                break
-
-        if not failed:
-            self.get_logger().info("Ball track params pushed")
-            shared.add_cli("Ball track params applied")
+        # Path / auto params
+        path = params.get("path", {})
+        if path.get("dirty", False):
+            path["dirty"] = False
+            shared.write_params({**params, "path": path})
+            push = {k: v for k, v in path.items() if k != "dirty"}
+            failed = False
+            for name, value in push.items():
+                try:
+                    subprocess.Popen(
+                        ["ros2", "param", "set", "/auto_node", name, str(value)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                except Exception as e:
+                    self.get_logger().warn(f"Auto param push failed {name}: {e}")
+                    shared.add_cli(f"Auto param push failed: {name}")
+                    failed = True
+                    break
+            if not failed:
+                self.get_logger().info("Auto params pushed")
+                shared.add_cli("Auto params applied")
 
     # ── Shutdown ─────────────────────────────────────────────────
 

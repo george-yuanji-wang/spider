@@ -48,7 +48,7 @@ CAPTURE_OPEN_SEC    = 1.0
 CAPTURE_DRIVE_SEC   = 2.0
 CAPTURE_CLOSE_SEC   = 1.0
 DEPOSIT_OPEN_SEC    = 2.0
-DEPOSIT_BACK_SEC    = 2.0
+DEPOSIT_BACK_SEC    = 5.0
 APPROACH_LOST_SEC   = 0.5
 
 # ── Capture alignment thresholds ─────────────────────────────────

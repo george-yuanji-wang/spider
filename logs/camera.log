@@ -1,8 +1,25 @@
 [ WARN:0] global ./modules/videoio/src/cap_gstreamer.cpp (1100) open OpenCV | GStreamer warning: Cannot query video position: status=0, value=-1, duration=-1
 [ WARN:0] global ./modules/videoio/src/cap_gstreamer.cpp (1390) setProperty OpenCV | GStreamer warning: GStreamer: unhandled property
 [ WARN:0] global ./modules/videoio/src/cap_gstreamer.cpp (1390) setProperty OpenCV | GStreamer warning: GStreamer: unhandled property
-[INFO] [1777928133.155621270] [camera]: Opened /dev/video0 — actual resolution: 1920x1080 @ 5.0fps
-[INFO] [1777928133.160163747] [camera]: Camera node started — /dev/video0 @ 640x480 30fps
+[INFO] [1778734450.576851008] [camera]: Opened /dev/video0 — actual resolution: 1920x1080 @ 5.0fps
+[INFO] [1778734450.581038026] [camera]: Camera node started — /dev/video0 @ 640x480 30fps
+Traceback (most recent call last):
+  File "/home/spider/spider/core/build/spider_core/spider_core/camera_node.py", line 166, in main
+    rclpy.spin(node)
+  File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/__init__.py", line 229, in spin
+    executor.spin_once()
+  File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 776, in spin_once
+    self._spin_once_impl(timeout_sec)
+  File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 765, in _spin_once_impl
+    handler, entity, node = self.wait_for_ready_callbacks(timeout_sec=timeout_sec)
+  File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 748, in wait_for_ready_callbacks
+    return next(self._cb_iter)
+  File "/opt/ros/humble/local/lib/python3.10/dist-packages/rclpy/executors.py", line 649, in _wait_for_ready_callbacks
+    raise ExternalShutdownException()
+rclpy.executors.ExternalShutdownException
+
+During handling of the above exception, another exception occurred:
+
 Traceback (most recent call last):
   File "/home/spider/spider/core/install/spider_core/lib/spider_core/camera_node", line 33, in <module>
     sys.exit(load_entry_point('spider-core', 'console_scripts', 'camera_node')())

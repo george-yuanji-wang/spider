@@ -37,7 +37,7 @@ import time
 
 
 # ── Tunable timing constants — adjust after testing ──────────────
-SEARCH_TURN_SPEED   = 30    # rotation speed when searching
+SEARCH_TURN_SPEED   = 60    # rotation speed when searching
 CAPTURE_OPEN_SEC    = 0.5   # time to wait after opening claw
 CAPTURE_DRIVE_SEC   = 1.5   # time to drive forward after opening claw
 CAPTURE_CLOSE_SEC   = 0.8   # time to wait after closing claw
@@ -58,7 +58,7 @@ class AutoNode(Node):
         super().__init__("auto_node")
 
         # ── Parameters ───────────────────────────────────────────
-        self.declare_parameter("approach_speed", 40)
+        self.declare_parameter("approach_speed", 80)
         self.declare_parameter("steer_gain",     0.3)
         self.declare_parameter("dead_zone",      40)
         self._load_params()

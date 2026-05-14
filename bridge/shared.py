@@ -50,7 +50,7 @@ DEFAULT_PARAMS = {
         "dirty":       False,
     },
     "path": {
-        "approach_speed": 40,
+        "approach_speed": 80,
         "steer_gain":     0.3,
         "dead_zone":      40,
         "dirty":          False,

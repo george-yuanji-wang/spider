@@ -34,7 +34,7 @@ export const defaultParams: Params = {
     dilate_iter: 1,
   },
   path: {
-    approach_speed: 40,
+    approach_speed: 80,
     steer_gain:     0.3,
     dead_zone:      40,
   },

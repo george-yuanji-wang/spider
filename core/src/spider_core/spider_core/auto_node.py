@@ -22,14 +22,18 @@ Publishes:
     auto/state          std_msgs/String     current state name for GUI
 
 Parameters (tunable from GUI):
-    approach_speed      int     forward speed during approach   default 40
+    approach_speed      int     forward speed during approach   default 80
     steer_gain          float   steering correction multiplier  default 0.3
     dead_zone           int     pixel error margin              default 40
+    ball_capture_cy     int     y-position where ball enters capture zone
+    capture_x_margin    int     horizontal centering margin for capture
+    align_turn_speed    int     in-place turn speed for final capture alignment
 """
 
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
+from rcl_interfaces.msg import SetParametersResult
 from std_msgs.msg import String
 import subprocess
 import json
@@ -37,16 +41,23 @@ import time
 
 
 # ── Tunable timing constants — adjust after testing ──────────────
-SEARCH_TURN_SPEED   = 30    # rotation speed when searching
-CAPTURE_OPEN_SEC    = 0.5   # time to wait after opening claw
-CAPTURE_DRIVE_SEC   = 1.5   # time to drive forward after opening claw
-CAPTURE_CLOSE_SEC   = 0.8   # time to wait after closing claw
-DEPOSIT_OPEN_SEC    = 0.8   # time claw stays open at deposit
-DEPOSIT_BACK_SEC    = 1.0   # time to reverse after deposit
+SEARCH_TURN_SPEED   = 60    # rotation speed when searching
+CAPTURE_OPEN_SEC    = 1.0   # time to wait after opening claw
+CAPTURE_DRIVE_SEC   = 2.0   # time to drive forward after opening claw
+CAPTURE_CLOSE_SEC   = 1.0   # time to wait after closing claw
+DEPOSIT_OPEN_SEC    = 2.0   # time claw stays open at deposit
+DEPOSIT_BACK_SEC    = 2.0   # time to reverse after deposit
 APPROACH_LOST_SEC   = 0.5   # drive straight if target lost for this long
 
+# ── Capture alignment thresholds ─────────────────────────────────
+# Instead of using ball bounding-box width to trigger capture, the robot
+# now waits until the detected ball center drops below this y-coordinate
+# and is horizontally centered enough.
+BALL_CAPTURE_CY     = 420   # px — ball center y at/below this → capture zone
+CAPTURE_X_MARGIN    = 45    # px — allowed horizontal error before capture
+ALIGN_TURN_SPEED    = 50    # motor speed for in-place fine alignment
+
 # ── Target size thresholds ───────────────────────────────────────
-BALL_CAPTURE_WIDTH  = 380   # px — ball this wide → start capture
 MAT_DEPOSIT_WIDTH   = 400   # px — mat this wide → start deposit
 
 FRAME_CX            = 320   # frame horizontal centre
@@ -58,9 +69,12 @@ class AutoNode(Node):
         super().__init__("auto_node")
 
         # ── Parameters ───────────────────────────────────────────
-        self.declare_parameter("approach_speed", 40)
-        self.declare_parameter("steer_gain",     0.3)
-        self.declare_parameter("dead_zone",      40)
+        self.declare_parameter("approach_speed",   80)
+        self.declare_parameter("steer_gain",       0.3)
+        self.declare_parameter("dead_zone",        40)
+        self.declare_parameter("ball_capture_cy",  BALL_CAPTURE_CY)
+        self.declare_parameter("capture_x_margin", CAPTURE_X_MARGIN)
+        self.declare_parameter("align_turn_speed", ALIGN_TURN_SPEED)
         self._load_params()
 
         # ── State machine ────────────────────────────────────────
@@ -69,8 +83,8 @@ class AutoNode(Node):
         self._armed       = False
         self._mode        = "manual"
         self._target      = None   # latest parsed vision target
-        self._last_seen   = 0.0   # time of last valid detection
-        self._phase_start = 0.0   # time current timed phase started
+        self._last_seen   = 0.0    # time of last valid detection
+        self._phase_start = 0.0    # time current timed phase started
 
         # Claw state owned here in auto mode
         self._claw        = False  # False=open, True=closed
@@ -95,9 +109,12 @@ class AutoNode(Node):
         self.get_logger().info("Auto node ready")
 
     def _load_params(self):
-        self.approach_speed = self.get_parameter("approach_speed").value
-        self.steer_gain     = self.get_parameter("steer_gain").value
-        self.dead_zone      = self.get_parameter("dead_zone").value
+        self.approach_speed   = self.get_parameter("approach_speed").value
+        self.steer_gain       = self.get_parameter("steer_gain").value
+        self.dead_zone        = self.get_parameter("dead_zone").value
+        self.ball_capture_cy  = self.get_parameter("ball_capture_cy").value
+        self.capture_x_margin = self.get_parameter("capture_x_margin").value
+        self.align_turn_speed = self.get_parameter("align_turn_speed").value
 
     # ── Subscribers ──────────────────────────────────────────────
 
@@ -108,7 +125,14 @@ class AutoNode(Node):
         else:
             try:
                 cx, cy, x, y, w, h = [float(v) for v in raw.split(",")]
-                self._target = {"cx": cx, "cy": cy, "x": x, "y": y, "w": w, "h": h}
+                self._target = {
+                    "cx": cx,
+                    "cy": cy,
+                    "x": x,
+                    "y": y,
+                    "w": w,
+                    "h": h,
+                }
                 self._last_seen = time.monotonic()
             except ValueError:
                 self._target = None
@@ -168,19 +192,45 @@ class AutoNode(Node):
         correction = min(abs(error) * self.steer_gain, spd * 0.8)
 
         if error > self.dead_zone:
-            # Target is to the right — turn right (slow left)
+            # Target is to the right — turn right by slowing right side.
             left  = int(spd)
             right = int(spd - correction)
+
         elif error < -self.dead_zone:
-            # Target is to the left — turn left (slow right)
+            # Target is to the left — turn left by slowing left side.
             left  = int(spd - correction)
             right = int(spd)
+
         else:
-            # Centered — drive straight
-            left  = spd
-            right = spd
+            # Centered — drive straight.
+            left  = int(spd)
+            right = int(spd)
 
         self._send_cmd(left, right, claw)
+
+    def _align_for_capture(self, target: dict, claw: bool):
+        """
+        Fine-align the ball horizontally without driving forward.
+
+        This is used only after the ball center has reached the capture
+        y-zone. At that point, the robot should not keep approaching;
+        it should rotate in place until the ball is centered enough,
+        then the state machine can enter CAPTURE.
+        """
+        error = target["cx"] - FRAME_CX
+        turn  = int(self.align_turn_speed)
+
+        if error > self.capture_x_margin:
+            # Ball is to the right — rotate right in place.
+            self._send_cmd(turn, -turn, claw)
+
+        elif error < -self.capture_x_margin:
+            # Ball is to the left — rotate left in place.
+            self._send_cmd(-turn, turn, claw)
+
+        else:
+            # Centered enough — hold still until transition check fires.
+            self._stop(claw)
 
     # ── State machine ────────────────────────────────────────────
 
@@ -207,6 +257,7 @@ class AutoNode(Node):
         # Only run state machine when armed and in auto mode
         if not self._armed or self._mode != "auto":
             self._stop(self._claw)
+
             # Publish state so GUI stays updated
             msg      = String()
             msg.data = self._state
@@ -226,19 +277,39 @@ class AutoNode(Node):
             if t is not None:
                 self._transition("APPROACH_BALL")
             else:
-                # Rotate slowly to search
-                self._send_cmd(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED, self._claw)
+                # Rotate to search
+                self._send_cmd(
+                    SEARCH_TURN_SPEED,
+                    -SEARCH_TURN_SPEED,
+                    self._claw,
+                )
 
         # ── APPROACH_BALL ────────────────────────────────────────
         elif self._state == "APPROACH_BALL":
-            if t is not None and t["w"] >= BALL_CAPTURE_WIDTH:
-                # Ball is large enough — begin capture
-                self._transition("CAPTURE")
-            elif t is None and time.monotonic() - self._last_seen > APPROACH_LOST_SEC:
+
+            if t is None and time.monotonic() - self._last_seen > APPROACH_LOST_SEC:
                 # Lost ball for too long — go back to search
                 self._transition("SEARCH_BALL")
-            else:
+
+            elif t is None:
+                # Lost ball briefly — keep existing behavior and drive straight
+                # for a short time, handled inside _steer().
                 self._steer(t, self._claw)
+
+            else:
+                x_error = t["cx"] - FRAME_CX
+
+                if t["cy"] >= self.ball_capture_cy:
+                    # Ball has reached the capture zone vertically.
+                    # Do not keep driving forward here. First center it.
+                    if abs(x_error) <= self.capture_x_margin:
+                        self._transition("CAPTURE")
+                    else:
+                        self._align_for_capture(t, self._claw)
+
+                else:
+                    # Ball is still too far up in the image, so keep approaching.
+                    self._steer(t, self._claw)
 
         # ── CAPTURE ──────────────────────────────────────────────
         elif self._state == "CAPTURE":
@@ -250,9 +321,13 @@ class AutoNode(Node):
                 self._stop(self._claw)
 
             elif elapsed < CAPTURE_OPEN_SEC + CAPTURE_DRIVE_SEC:
-                # Phase 2: drive forward slowly with claw open
+                # Phase 2: drive forward with claw open
                 self._claw = False
-                self._send_cmd(self.approach_speed, self.approach_speed, self._claw)
+                self._send_cmd(
+                    self.approach_speed,
+                    self.approach_speed,
+                    self._claw,
+                )
 
             elif elapsed < CAPTURE_OPEN_SEC + CAPTURE_DRIVE_SEC + CAPTURE_CLOSE_SEC:
                 # Phase 3: close claw and stop
@@ -268,14 +343,20 @@ class AutoNode(Node):
             if t is not None:
                 self._transition("APPROACH_MAT")
             else:
-                self._send_cmd(SEARCH_TURN_SPEED, -SEARCH_TURN_SPEED, self._claw)
+                self._send_cmd(
+                    SEARCH_TURN_SPEED,
+                    -SEARCH_TURN_SPEED,
+                    self._claw,
+                )
 
         # ── APPROACH_MAT ─────────────────────────────────────────
         elif self._state == "APPROACH_MAT":
             if t is not None and t["w"] >= MAT_DEPOSIT_WIDTH:
                 self._transition("DEPOSIT")
+
             elif t is None and time.monotonic() - self._last_seen > APPROACH_LOST_SEC:
                 self._transition("SEARCH_MAT")
+
             else:
                 self._steer(t, self._claw)
 
@@ -289,7 +370,7 @@ class AutoNode(Node):
                 self._stop(self._claw)
 
             elif elapsed < DEPOSIT_OPEN_SEC + DEPOSIT_BACK_SEC:
-                # Back up slowly
+                # Back up
                 spd = self.approach_speed
                 self._send_cmd(-spd, -spd, self._claw)
 
@@ -309,12 +390,14 @@ class AutoNode(Node):
             if hasattr(self, p.name):
                 setattr(self, p.name, p.value)
                 self.get_logger().info(f"Param updated: {p.name} = {p.value}")
-        return rclpy.node.SetParametersResult(successful=True)
+
+        return SetParametersResult(successful=True)
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = AutoNode()
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
